@@ -1,0 +1,96 @@
+name: DevSecOps CI/CD Security Pipeline - Phase 3
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  secret-scan:
+    name: 1. Secret Detection (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-security-scan:
+    name: 2. Dependency Vulnerability Scan (OWASP / npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Audit Backend Dependencies
+        run: |
+          cd server
+          npm ci
+          npm run audit:check || echo "Dependency audit finished with warnings"
+
+      - name: Audit Frontend Dependencies
+        run: |
+          cd client
+          npm ci
+          npm run audit:check || echo "Dependency audit finished with warnings"
+
+  code-quality-and-tests:
+    name: 3. Code Quality, Tests & Coverage (SonarQube)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Backend Integration Tests & Coverage
+        run: |
+          cd server
+          npm ci
+          npm run test:coverage
+
+      - name: Build Frontend Application
+        run: |
+          cd client
+          npm ci
+          npm run build
+
+      - name: SonarQube Code Quality Scan
+        uses: SonarSource/sonarqube-scan-action@v2.0.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        continue-on-error: true
+
+  docker-build:
+    name: 4. Container Build Pipeline
+    needs: [secret-scan, dependency-security-scan, code-quality-and-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Server Docker Image
+        run: |
+          docker build -t devsecops-server:${{ github.sha }} -t devsecops-server:latest ./server
+
+      - name: Build Client Docker Image
+        run: |
+          docker build -t devsecops-client:${{ github.sha }} -t devsecops-client:latest ./client

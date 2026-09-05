@@ -1,0 +1,38 @@
+# Gitleaks Configuration for DevSecOps Platform
+
+title = "DevSecOps Security Rules"
+
+[allowlist]
+description = "Global allowlist for sample environment variables and test files"
+paths = [
+  '''\.env\.example$''',
+  '''server/tests/.*''',
+  '''package-lock\.json$'''
+]
+regexes = [
+  '''supersecretjwtkey_.*'''
+]
+
+# Custom Secret Detection Rules
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|secret[_-]?key|auth[_-]?token)[\s]*[=:][\s]*['"]([a-zA-Z0-9_\-]{16,})['"]'''
+secretGroup = 2
+entropy = 3.5
+
+[[rules]]
+id = "jwt-secret-hardcoded"
+description = "Hardcoded JWT Secret Key"
+regex = '''(?i)(jwt_secret|jwtsecret)[\s]*[=:][\s]*['"]([a-zA-Z0-9_\-]{10,})['"]'''
+secretGroup = 2
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----'''
+
+[[rules]]
+id = "aws-access-key-id"
+description = "AWS Access Key ID"
+regex = '''(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'''

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Database Service
+  mongodb:
+    image: mongo:6.0
+    container_name: devsecops-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=devsecops
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Express Backend REST API
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: devsecops-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/devsecops
+      - JWT_SECRET=supersecretjwtkey_docker_environment_12345
+      - JWT_EXPIRES_IN=7d
+      - NODE_ENV=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # React Frontend + Nginx Proxy
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: devsecops-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+
+volumes:
+  mongodb_data:
